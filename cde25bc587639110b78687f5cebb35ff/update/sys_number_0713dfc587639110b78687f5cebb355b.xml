@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sys_number">
+    <sys_number action="INSERT_OR_UPDATE">
+        <category display_value="" name="x_snc_mako_sbb_r_0_kundenoptionen">x_snc_mako_sbb_r_0_kundenoptionen</category>
+        <maximum_digits>7</maximum_digits>
+        <number>1000</number>
+        <prefix>KUN</prefix>
+        <sys_class_name>sys_number</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2022-12-02 09:30:15</sys_created_on>
+        <sys_id>0713dfc587639110b78687f5cebb355b</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>KUN</sys_name>
+        <sys_package display_value="MaKo_SBB_renald" source="x_snc_mako_sbb_r_0">cde25bc587639110b78687f5cebb35ff</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="MaKo_SBB_renald">cde25bc587639110b78687f5cebb35ff</sys_scope>
+        <sys_update_name>sys_number_0713dfc587639110b78687f5cebb355b</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2022-12-02 09:30:15</sys_updated_on>
+    </sys_number>
+</record_update>

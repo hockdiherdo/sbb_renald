@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?><database>
+    <element db_object_id="6bf6e78587e39110b78687f5cebb35c7" label="kunden" max_length="40" name="x_snc_mako_sbb_r_0_kunden" type="collection">
+        <element display="true" label="kunde" max_length="32" name="kunde" reference="core_company" type="reference"/>
+        <index name="index">
+            <element name="kunde"/>
+        </index>
+    </element>
+</database>

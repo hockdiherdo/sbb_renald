@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?><database>
+    <element db_object_id="3a13dfc587639110b78687f5cebb3525" label="kundenoptionen" max_length="40" name="x_snc_mako_sbb_r_0_kundenoptionen" type="collection">
+        <element label="kunde" max_length="32" name="kunde" reference="x_snc_mako_sbb_r_0_kunden" type="reference"/>
+        <element attributes="edge_encryption_enabled=true" default="javascript:global.getNextObjNumberPadded();" label="Number" max_length="40" name="number" type="string"/>
+        <element display="true" label="option" max_length="40" name="option" type="string"/>
+        <element label="Primaer" max_length="40" name="primaer" type="boolean"/>
+        <index name="index">
+            <element name="kunde"/>
+        </index>
+    </element>
+</database>

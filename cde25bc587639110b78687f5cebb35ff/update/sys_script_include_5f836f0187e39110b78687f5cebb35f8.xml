@@ -1,0 +1,171 @@
+<?xml version="1.0" encoding="UTF-8"?><record_update table="sys_script_include">
+    <sys_script_include action="INSERT_OR_UPDATE">
+        <access>public</access>
+        <active>true</active>
+        <api_name>x_snc_mako_sbb_r_0.AssetReclamationUtil</api_name>
+        <caller_access/>
+        <client_callable>true</client_callable>
+        <description/>
+        <name>AssetReclamationUtil</name>
+        <script><![CDATA[var AssetReclamationUtil = Class.create();
+AssetReclamationUtil.prototype = Object.extendsObject(AbstractAjaxProcessor, {
+
+	filterRequestedForUsers: function(role, sysId) {
+		if (role.toString() === 'manager') {
+			return 'manager=' + sysId;
+		}
+		return '';
+	},
+
+	getAssetsAssignedTo: function() {
+		var requestedFor = this.getParameter('sysparm_userVal');
+		var assetsGr = new GlideRecord('alm_asset');
+		assetsGr.addEncodedQuery('assigned_to=' + requestedFor + '^(sys_class_name=alm_consumable^ORsys_class_name=alm_hardware)^sys_idNOT IN' + this.getAssetsToExclude(requestedFor));
+		var listToPopulate = [];
+		assetsGr.query();
+		while (assetsGr.next()) {
+			listToPopulate.push(assetsGr.getUniqueValue());
+		}
+		return listToPopulate.toString();
+	},
+
+	closeAssetReclamationRequest: function(assetReclamationRequestID) {
+		var hamLinesClosed = this.checkHAMLinesClosed(assetReclamationRequestID);
+		var samLinesClosed = this.checkSAMLinesClosed(assetReclamationRequestID);
+		if (hamLinesClosed && samLinesClosed) {
+			this.updateAssetReclaimRequestState(assetReclamationRequestID);
+		}
+	},
+
+	checkHAMLinesClosed: function(assetReclamationRequestID) {
+		if (!GlidePluginManager.isActive('com.sn_hamp')) {
+			return true;
+		}
+		var hamLineQuery = new global.GlideQuery('sn_hamp_asset_reclaim_line')
+			.where('asset_reclaim_request', assetReclamationRequestID);
+		var totalHamLines = hamLineQuery.count();
+		var totalHamLinesClosed = hamLineQuery.where('stage', 'IN', ['closed_complete', 'closed_skipped']).count();
+		if (totalHamLines === totalHamLinesClosed) {
+			return true;
+		}
+		return false;
+	},
+
+	checkSAMLinesClosed: function(assetReclamationRequestID) {
+		if (!GlidePluginManager.isActive('com.snc.samp')) {
+			return true;
+		}
+		var samLineQuery = new global.GlideQuery('samp_asset_reclaim_line')
+			.where('asset_reclaim_request', assetReclamationRequestID);
+		var totalSAMLines = samLineQuery.count();
+		var totalSAMLinesClosed = samLineQuery.where('state', 'IN', ['completed', 'canceled', 'failed']).count();
+		if (totalSAMLines === totalSAMLinesClosed) {
+			return true;
+		}
+		return false;
+	},
+
+	updateAssetReclaimRequestState: function(assetReclamationRequestID) {
+		var assetReclaimRequestState = 3; // completed
+		var hamFailedLines = 0;
+		var samFailedLines = 0;
+		if (GlidePluginManager.isActive('com.sn_hamp')) {
+			hamFailedLines = new global.GlideQuery('sn_hamp_asset_reclaim_line')
+				.where('asset_reclaim_request', assetReclamationRequestID)
+				.where('stage', 'closed_skipped')
+				.count();
+		}
+		if (GlidePluginManager.isActive('com.snc.samp')) {
+			samFailedLines = new global.GlideQuery('samp_asset_reclaim_line')
+				.where('asset_reclaim_request', assetReclamationRequestID)
+				.where('state', 'failed')
+				.count();
+		}
+		if (hamFailedLines > 0 || samFailedLines > 0) {
+			assetReclaimRequestState = 4; // completed with errors
+		}
+		new global.GlideQuery('asset_reclamation_request')
+			.where('sys_id', assetReclamationRequestID)
+			.update({
+				state: assetReclaimRequestState,
+			});
+	},
+
+	closeFlowContexts: function(assetReclamationRequest) {
+		this.cancelFlowContextForReclaimLine('com.sn_hamp', assetReclamationRequest.getUniqueValue(), 'sn_hamp_asset_reclaim_line');
+		this.cancelFlowContextForReclaimLine('com.snc.samp', assetReclamationRequest.getUniqueValue(), 'samp_asset_reclaim_line');
+	},
+
+	cancelFlowContextForReclaimLine: function(pluginName, assetReclamationRequestID, table) {
+		if (GlidePluginManager.isActive(pluginName)) {
+			var gr = new GlideRecord(table);
+			gr.addQuery('asset_reclaim_request', assetReclamationRequestID);
+			gr.query();
+			while (gr.next()) {
+				sn_fd.FlowAPI.cancel(gr.getValue('flow_context'), 'Canceling flow because trigger record is deleted');
+			}
+		}
+	},
+
+	getAssetsToExclude: function(requestedFor) {
+		var list = [];
+		var gr = new GlideRecord('asset_reclamation_request');
+		gr.addQuery('requested_for', requestedFor);
+		gr.query();
+		while (gr.next()) {
+			list.push(gr.getValue('assets'));
+		}
+		list = list.join(',');
+		return list;
+	},
+
+	validateAssetReclamationRequest: function(assetReclamationRequest) {
+		var mandatoryFields = ['requested_for', 'reclaim_date'];
+		for (var i = 0; i < mandatoryFields.length; i++) {
+			if (gs.nil(current.getValue(mandatoryFields[i]))) {
+				return false;
+			}
+		}
+
+		// validate assets
+		var assets = assetReclamationRequest.getValue('assets');
+		var assetsGR = new GlideRecord('alm_asset');
+		assetsGR.addQuery('assigned_to', assetReclamationRequest.getValue('requested_for'));
+		assetsGR.addEncodedQuery('sys_id IN ' + assets);
+		assetsGR.query();
+		var validAssets = assetsGR.getRowCount() === assets.split(',').length;
+		if (!validAssets) {
+			return false;
+		}
+
+		if (!gs.hasRole('admin')) {
+			var requestedBy = assetReclamationRequest.getValue('requested_by');
+			if (requestedBy === 'manager' && assetReclamationRequest.requested_for.manager.toString() !== gs.getUserID()) {
+				return false;
+			} if (requestedBy === 'user') {
+				if (assetReclamationRequest.requested_for.toString() !== gs.getUserID()
+						|| assetReclamationRequest.getValue('employee_separation') === 'true') {
+					return false;
+				}
+			}
+		}
+
+		return true;
+	},
+
+	type: 'AssetReclamationUtil',
+});]]></script>
+        <sys_class_name>sys_script_include</sys_class_name>
+        <sys_created_by>admin</sys_created_by>
+        <sys_created_on>2022-12-02 10:42:05</sys_created_on>
+        <sys_id>5f836f0187e39110b78687f5cebb35f8</sys_id>
+        <sys_mod_count>0</sys_mod_count>
+        <sys_name>AssetReclamationUtil</sys_name>
+        <sys_package display_value="MaKo_SBB_renald" source="x_snc_mako_sbb_r_0">cde25bc587639110b78687f5cebb35ff</sys_package>
+        <sys_policy/>
+        <sys_scope display_value="MaKo_SBB_renald">cde25bc587639110b78687f5cebb35ff</sys_scope>
+        <sys_update_name>sys_script_include_5f836f0187e39110b78687f5cebb35f8</sys_update_name>
+        <sys_updated_by>admin</sys_updated_by>
+        <sys_updated_on>2022-12-02 10:42:05</sys_updated_on>
+    </sys_script_include>
+</record_update>
